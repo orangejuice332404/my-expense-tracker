@@ -26,7 +26,6 @@ const SplashScreen = () => {
         <Wallet size={64} className="text-white drop-shadow-md" />
       </div>
       <div className="text-center space-y-2">
-        {/* 修改点 1: 开屏文字 */}
         <h1 className="text-3xl font-bold tracking-widest animate-slide-up" style={{ animationDelay: '0.2s' }}>
           王猪猪专属记账本
         </h1>
@@ -61,15 +60,54 @@ const BudgetAlertModal = ({ isOpen, onClose }) => {
   );
 };
 
-// --- 趋势图组件 (SVG Line Chart) ---
+// --- 💳 钱包查账弹窗 (新增) ---
+const WalletModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="bg-white w-[280px] p-6 rounded-3xl shadow-2xl text-center animate-scale-up" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-gray-800 mb-6">快捷查账助手</h3>
+        
+        <div className="space-y-4">
+          {/* 微信跳转 */}
+          <a 
+            href="weixin://" 
+            className="flex items-center justify-center gap-3 w-full py-3.5 bg-[#07C160] hover:bg-[#06ad56] text-white rounded-xl font-bold transition-transform active:scale-95 shadow-lg shadow-green-200 no-underline"
+          >
+            <span className="text-xl">💬</span> 
+            <span>打开微信</span>
+          </a>
+
+          {/* 支付宝跳转 (尝试直接跳账单页) */}
+          <a 
+            href="alipays://platformapi/startapp?appId=20000055" 
+            className="flex items-center justify-center gap-3 w-full py-3.5 bg-[#1677FF] hover:bg-[#1366db] text-white rounded-xl font-bold transition-transform active:scale-95 shadow-lg shadow-blue-200 no-underline"
+          >
+            <span className="text-xl">💳</span>
+            <span>打开支付宝账单</span>
+          </a>
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="mt-6 text-sm text-gray-400 hover:text-gray-600 p-2"
+        >
+          关闭
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- 趋势图组件 ---
 const TrendChart = ({ data, lineColor = "#10b981" }) => {
   if (!data || data.length === 0) return <div className="h-32 flex items-center justify-center text-gray-300 text-xs">暂无数据</div>;
 
   const height = 100;
   const width = 300;
-  const maxVal = Math.max(...data.map(d => d.amount), 10); // 避免除以0，最小刻度10
+  const maxVal = Math.max(...data.map(d => d.amount), 10); 
   
-  // 生成路径点
   const points = data.map((d, i) => {
     const x = (i / (data.length - 1)) * width;
     const y = height - (d.amount / maxVal) * height;
@@ -79,53 +117,17 @@ const TrendChart = ({ data, lineColor = "#10b981" }) => {
   return (
     <div className="w-full overflow-hidden">
       <svg viewBox={`0 -10 ${width} ${height + 20}`} className="w-full h-32 overflow-visible">
-        {/* 背景网格线 */}
         <line x1="0" y1={height} x2={width} y2={height} stroke="#e5e7eb" strokeWidth="1" />
         <line x1="0" y1={0} x2={width} y2={0} stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4 4" />
-        
-        {/* 折线 */}
-        <polyline 
-          fill="none" 
-          stroke={lineColor} 
-          strokeWidth="2" 
-          points={points} 
-          strokeLinecap="round" 
-          strokeLinejoin="round"
-          className="drop-shadow-sm"
-        />
-        
-        {/* 数据点 (只显示金额 > 0 的点) */}
+        <polyline fill="none" stroke={lineColor} strokeWidth="2" points={points} strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm"/>
         {data.map((d, i) => d.amount > 0 && (
           <g key={i}>
-            <circle 
-              cx={(i / (data.length - 1)) * width} 
-              cy={height - (d.amount / maxVal) * height} 
-              r="3" 
-              fill="white" 
-              stroke={lineColor} 
-              strokeWidth="2"
-            />
-            {/* 最高点显示数值 */}
-            {d.amount === maxVal && (
-               <text 
-                 x={(i / (data.length - 1)) * width} 
-                 y={height - (d.amount / maxVal) * height - 8}
-                 fontSize="10" 
-                 fill={lineColor}
-                 textAnchor="middle"
-                 fontWeight="bold"
-               >
-                 ¥{d.amount}
-               </text>
-            )}
+            <circle cx={(i / (data.length - 1)) * width} cy={height - (d.amount / maxVal) * height} r="3" fill="white" stroke={lineColor} strokeWidth="2"/>
+            {d.amount === maxVal && <text x={(i / (data.length - 1)) * width} y={height - (d.amount / maxVal) * height - 8} fontSize="10" fill={lineColor} textAnchor="middle" fontWeight="bold">¥{d.amount}</text>}
           </g>
         ))}
       </svg>
-      <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
-        <span>1日</span>
-        <span>15日</span>
-        <span>{data.length}日</span>
-      </div>
+      <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1"><span>1日</span><span>15日</span><span>{data.length}日</span></div>
     </div>
   );
 };
@@ -271,7 +273,7 @@ const CalendarWidget = ({ currentDate, transactions, onDateSelect }) => {
 const StatsView = ({ transactions, onExport, onImportTrigger }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState('expense');
-  const [selectedCategory, setSelectedCategory] = useState('all'); // 新增：分类筛选状态
+  const [selectedCategory, setSelectedCategory] = useState('all'); 
 
   const monthlyTransactions = transactions.filter(t => {
     const tDate = new Date(t.date);
@@ -291,20 +293,12 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
-  // 修改点 2: 计算每日趋势数据
   const dailyTrendData = useMemo(() => {
     const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
     const data = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      // 筛选：当月、选中的类型(支出/收入)、选中的分类(全部/特定分类)
-      const dailyAmount = transactions
-        .filter(t => 
-          t.date === dateStr && 
-          t.type === viewType && 
-          (selectedCategory === 'all' || t.category === selectedCategory)
-        )
-        .reduce((sum, t) => sum + t.amount, 0);
+      const dailyAmount = transactions.filter(t => t.date === dateStr && t.type === viewType && (selectedCategory === 'all' || t.category === selectedCategory)).reduce((sum, t) => sum + t.amount, 0);
       data.push({ day: d, amount: dailyAmount });
     }
     return data;
@@ -320,38 +314,15 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
       
       <CalendarWidget currentDate={currentDate} transactions={monthlyTransactions} />
       
-      {/* 修改点 3: 支出趋势图模块 */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 animate-slide-in-up">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-800 flex items-center gap-2">
-            <LineChart size={16} className="text-emerald-600"/>
-            {viewType === 'expense' ? '支出' : '收入'}趋势
-          </h3>
-          {/* 分类筛选器 (水平滚动) */}
+          <h3 className="font-bold text-gray-800 flex items-center gap-2"><LineChart size={16} className="text-emerald-600"/>{viewType === 'expense' ? '支出' : '收入'}趋势</h3>
           <div className="flex gap-2 overflow-x-auto max-w-[180px] no-scrollbar pb-1">
-            <button 
-              onClick={() => setSelectedCategory('all')}
-              className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
-            >
-              全部
-            </button>
-            {categoryList.map(cat => (
-              <button 
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === cat.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}
-              >
-                {cat.name}
-              </button>
-            ))}
+            <button onClick={() => setSelectedCategory('all')} className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}>全部</button>
+            {categoryList.map(cat => (<button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === cat.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{cat.name}</button>))}
           </div>
         </div>
-        
-        {/* 趋势图表 */}
-        <TrendChart 
-          data={dailyTrendData} 
-          lineColor={viewType === 'expense' ? '#f43f5e' : '#10b981'} 
-        />
+        <TrendChart data={dailyTrendData} lineColor={viewType === 'expense' ? '#f43f5e' : '#10b981'} />
       </div>
 
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 animate-slide-in-up" style={{ animationDelay: '0.1s', animationFillMode: 'both' }}>
@@ -473,6 +444,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home'); 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  // 💰 新增：钱包弹窗状态
+  const [showWalletModal, setShowWalletModal] = useState(false);
   
   const [transactions, setTransactions] = useState([]);
   const [monthlyBudget, setMonthlyBudget] = useState(0); 
@@ -622,6 +595,9 @@ export default function App() {
       )}
 
       <BudgetAlertModal isOpen={showBudgetAlert} onClose={() => { setShowBudgetAlert(false); setBudgetAlertDismissed(true); }} />
+      
+      {/* 💳 钱包弹窗 */}
+      <WalletModal isOpen={showWalletModal} onClose={() => setShowWalletModal(false)} />
 
       {activeTab === 'home' && (
         <div className="animate-fade-in">
@@ -633,7 +609,8 @@ export default function App() {
                    <div className="flex items-center gap-1 text-emerald-100 text-sm font-medium mb-1"><span>本月剩余预算</span><Settings size={14} className="opacity-70" /></div>
                    <div className="text-4xl font-bold tracking-tight"><span className="text-2xl opacity-80 mr-1">¥</span>{monthlyBudget > 0 ? <CountUp end={remainingBudget} /> : '--'}</div>
                  </div>
-                 <div className="bg-white/20 p-2 rounded-lg backdrop-blur-md shadow-inner"><Wallet size={20} className="text-white" /></div>
+                 {/* 钱包图标：增加点击事件，触发 WalletModal */}
+                 <div onClick={() => setShowWalletModal(true)} className="bg-white/20 p-2 rounded-lg backdrop-blur-md shadow-inner cursor-pointer hover:bg-white/30 transition-colors active:scale-95"><Wallet size={20} className="text-white" /></div>
               </div>
               {monthlyBudget > 0 && (
                 <div className="mb-6">
@@ -690,6 +667,7 @@ export default function App() {
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes slideInUp { to { opacity: 1; transform: translateY(0); } }
+        @keyframes fillWidth { to { width: var(--target-width); } }
         
         @keyframes bounceIn {
           0% { transform: scale(0); opacity: 0; }
