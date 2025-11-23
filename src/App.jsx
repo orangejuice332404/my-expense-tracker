@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Plus, Wallet, TrendingUp, TrendingDown, PieChart, Home, Trash2, 
   Utensils, Bus, ShoppingBag, Coffee, Home as HouseIcon, Stethoscope, 
   Briefcase, Gift, CreditCard, MoreHorizontal, X, Camera, Loader2, Sparkles,
   Download, Upload, ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon,
-  FileJson
+  LineChart, Filter
 } from 'lucide-react';
 
 // --- ⚠️ 国内大模型 API 配置 ---
@@ -14,6 +14,7 @@ const AI_CONFIG = {
   
   baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
   
+  // ✅ 已配置为 GLM-4.5-Flash
   model: "glm-4v-flash" 
 };
 
@@ -25,8 +26,13 @@ const SplashScreen = () => {
         <Wallet size={64} className="text-white drop-shadow-md" />
       </div>
       <div className="text-center space-y-2">
-        <h1 className="text-4xl font-bold tracking-widest animate-slide-up" style={{ animationDelay: '0.2s' }}>简易记账</h1>
-        <p className="text-emerald-100 text-sm font-light tracking-wide animate-slide-up" style={{ animationDelay: '0.4s' }}>让每一笔开支都清晰可见</p>
+        {/* 修改点 1: 开屏文字 */}
+        <h1 className="text-3xl font-bold tracking-widest animate-slide-up" style={{ animationDelay: '0.2s' }}>
+          王猪猪专属记账本
+        </h1>
+        <p className="text-emerald-100 text-sm font-light tracking-wide animate-slide-up" style={{ animationDelay: '0.4s' }}>
+          每一笔都算数 🐷
+        </p>
       </div>
       <div className="absolute bottom-20 w-48 h-1.5 bg-emerald-900/30 rounded-full overflow-hidden">
         <div className="h-full bg-emerald-200/80 rounded-full w-full animate-progress origin-left"></div>
@@ -35,7 +41,7 @@ const SplashScreen = () => {
   );
 };
 
-// --- 🐷 新增：超支预警弹窗 ---
+// --- 🐷 超支预警弹窗 ---
 const BudgetAlertModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
@@ -50,6 +56,75 @@ const BudgetAlertModal = ({ isOpen, onClose }) => {
         >
           我知道了 😭
         </button>
+      </div>
+    </div>
+  );
+};
+
+// --- 趋势图组件 (SVG Line Chart) ---
+const TrendChart = ({ data, lineColor = "#10b981" }) => {
+  if (!data || data.length === 0) return <div className="h-32 flex items-center justify-center text-gray-300 text-xs">暂无数据</div>;
+
+  const height = 100;
+  const width = 300;
+  const maxVal = Math.max(...data.map(d => d.amount), 10); // 避免除以0，最小刻度10
+  
+  // 生成路径点
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - (d.amount / maxVal) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="w-full overflow-hidden">
+      <svg viewBox={`0 -10 ${width} ${height + 20}`} className="w-full h-32 overflow-visible">
+        {/* 背景网格线 */}
+        <line x1="0" y1={height} x2={width} y2={height} stroke="#e5e7eb" strokeWidth="1" />
+        <line x1="0" y1={0} x2={width} y2={0} stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4 4" />
+        
+        {/* 折线 */}
+        <polyline 
+          fill="none" 
+          stroke={lineColor} 
+          strokeWidth="2" 
+          points={points} 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+          className="drop-shadow-sm"
+        />
+        
+        {/* 数据点 (只显示金额 > 0 的点) */}
+        {data.map((d, i) => d.amount > 0 && (
+          <g key={i}>
+            <circle 
+              cx={(i / (data.length - 1)) * width} 
+              cy={height - (d.amount / maxVal) * height} 
+              r="3" 
+              fill="white" 
+              stroke={lineColor} 
+              strokeWidth="2"
+            />
+            {/* 最高点显示数值 */}
+            {d.amount === maxVal && (
+               <text 
+                 x={(i / (data.length - 1)) * width} 
+                 y={height - (d.amount / maxVal) * height - 8}
+                 fontSize="10" 
+                 fill={lineColor}
+                 textAnchor="middle"
+                 fontWeight="bold"
+               >
+                 ¥{d.amount}
+               </text>
+            )}
+          </g>
+        ))}
+      </svg>
+      <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
+        <span>1日</span>
+        <span>15日</span>
+        <span>{data.length}日</span>
       </div>
     </div>
   );
@@ -196,20 +271,44 @@ const CalendarWidget = ({ currentDate, transactions, onDateSelect }) => {
 const StatsView = ({ transactions, onExport, onImportTrigger }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState('expense');
+  const [selectedCategory, setSelectedCategory] = useState('all'); // 新增：分类筛选状态
+
   const monthlyTransactions = transactions.filter(t => {
     const tDate = new Date(t.date);
     return tDate.getMonth() === currentDate.getMonth() && tDate.getFullYear() === currentDate.getFullYear();
   });
+
   const filteredByType = monthlyTransactions.filter(t => t.type === viewType);
   const total = filteredByType.reduce((acc, curr) => acc + curr.amount, 0);
+  
   const categoryTotals = filteredByType.reduce((acc, curr) => { acc[curr.category] = (acc[curr.category] || 0) + curr.amount; return acc; }, {});
   const categoryList = viewType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
   const statsData = Object.entries(categoryTotals).map(([catId, amount]) => {
     const catInfo = categoryList.find(c => c.id === catId) || { name: '其他', color: 'bg-gray-100', icon: MoreHorizontal };
     return { ...catInfo, amount, percentage: total === 0 ? 0 : (amount / total) * 100 };
   }).sort((a, b) => b.amount - a.amount);
+
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+  // 修改点 2: 计算每日趋势数据
+  const dailyTrendData = useMemo(() => {
+    const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+    const data = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      // 筛选：当月、选中的类型(支出/收入)、选中的分类(全部/特定分类)
+      const dailyAmount = transactions
+        .filter(t => 
+          t.date === dateStr && 
+          t.type === viewType && 
+          (selectedCategory === 'all' || t.category === selectedCategory)
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
+      data.push({ day: d, amount: dailyAmount });
+    }
+    return data;
+  }, [currentDate, viewType, selectedCategory, transactions]);
 
   return (
     <div className="pb-24 animate-fade-in px-4 pt-4">
@@ -218,7 +317,43 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
         <div className="text-lg font-bold text-gray-800 flex items-center gap-2 transition-all" key={currentDate.toString()}><CalendarIcon size={18} className="text-emerald-600"/>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</div>
         <button onClick={nextMonth} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 hover:scale-110 transition-all"><ChevronRight size={20} /></button>
       </div>
+      
       <CalendarWidget currentDate={currentDate} transactions={monthlyTransactions} />
+      
+      {/* 修改点 3: 支出趋势图模块 */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 animate-slide-in-up">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            <LineChart size={16} className="text-emerald-600"/>
+            {viewType === 'expense' ? '支出' : '收入'}趋势
+          </h3>
+          {/* 分类筛选器 (水平滚动) */}
+          <div className="flex gap-2 overflow-x-auto max-w-[180px] no-scrollbar pb-1">
+            <button 
+              onClick={() => setSelectedCategory('all')}
+              className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
+            >
+              全部
+            </button>
+            {categoryList.map(cat => (
+              <button 
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedCategory === cat.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* 趋势图表 */}
+        <TrendChart 
+          data={dailyTrendData} 
+          lineColor={viewType === 'expense' ? '#f43f5e' : '#10b981'} 
+        />
+      </div>
+
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 animate-slide-in-up" style={{ animationDelay: '0.1s', animationFillMode: 'both' }}>
         <div className="flex bg-gray-100 p-1 rounded-xl mb-4 w-full">
           <button className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${viewType === 'expense' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setViewType('expense')}>本月支出</button>
@@ -345,7 +480,6 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiData, setAiData] = useState(null);
   
-  // 🚨 新增：猪猪超支预警状态 🚨
   const [showBudgetAlert, setShowBudgetAlert] = useState(false);
   const [budgetAlertDismissed, setBudgetAlertDismissed] = useState(false);
 
@@ -380,7 +514,6 @@ export default function App() {
     }
   }, [transactions, monthlyBudget, loaded]);
 
-  // 计算当前剩余预算 (用于触发猪猪弹窗)
   const now = new Date();
   const currentMonthExpense = transactions.filter(t => {
      const d = new Date(t.date);
@@ -389,12 +522,10 @@ export default function App() {
   
   const remainingBudget = monthlyBudget - currentMonthExpense;
 
-  // 🐷 猪猪监听器：没钱了就报警！
   useEffect(() => {
     if (monthlyBudget > 0 && remainingBudget < 0 && !budgetAlertDismissed) {
       setShowBudgetAlert(true);
     }
-    // 如果预算恢复正数，重置“已忽略”状态
     if (remainingBudget >= 0) {
       setBudgetAlertDismissed(false);
     }
@@ -490,107 +621,56 @@ export default function App() {
         </div>
       )}
 
-      {/* 🐷 猪猪弹窗 */}
-      <BudgetAlertModal 
-        isOpen={showBudgetAlert} 
-        onClose={() => { setShowBudgetAlert(false); setBudgetAlertDismissed(true); }} 
-      />
+      <BudgetAlertModal isOpen={showBudgetAlert} onClose={() => { setShowBudgetAlert(false); setBudgetAlertDismissed(true); }} />
 
       {activeTab === 'home' && (
         <div className="animate-fade-in">
-          {/* Header Card (Removed Shimmer & Pulse) */}
           <div className="bg-emerald-600 text-white p-6 rounded-b-[2.5rem] shadow-lg shadow-emerald-200 relative overflow-hidden">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-xl"></div>
-            
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-4">
                  <div onClick={() => setShowBudgetModal(true)} className="cursor-pointer active:scale-95 transition-transform origin-left">
-                   <div className="flex items-center gap-1 text-emerald-100 text-sm font-medium mb-1">
-                      <span>本月剩余预算</span>
-                      <Settings size={14} className="opacity-70" />
-                   </div>
-                   <div className="text-4xl font-bold tracking-tight">
-                     <span className="text-2xl opacity-80 mr-1">¥</span>
-                     {monthlyBudget > 0 ? <CountUp end={remainingBudget} /> : '--'}
-                   </div>
+                   <div className="flex items-center gap-1 text-emerald-100 text-sm font-medium mb-1"><span>本月剩余预算</span><Settings size={14} className="opacity-70" /></div>
+                   <div className="text-4xl font-bold tracking-tight"><span className="text-2xl opacity-80 mr-1">¥</span>{monthlyBudget > 0 ? <CountUp end={remainingBudget} /> : '--'}</div>
                  </div>
-                 <div className="bg-white/20 p-2 rounded-lg backdrop-blur-md shadow-inner">
-                   <Wallet size={20} className="text-white" />
-                 </div>
+                 <div className="bg-white/20 p-2 rounded-lg backdrop-blur-md shadow-inner"><Wallet size={20} className="text-white" /></div>
               </div>
-
               {monthlyBudget > 0 && (
                 <div className="mb-6">
-                  <div className="flex justify-between text-xs text-emerald-100 mb-1">
-                    <span>已用 {((currentMonthExpense/monthlyBudget)*100).toFixed(0)}%</span>
-                    <span>预算 {monthlyBudget}</span>
-                  </div>
-                  <div className="w-full bg-black/20 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${remainingBudget < 0 ? 'bg-red-400' : 'bg-white'}`} 
-                      style={{ width: `${budgetProgress}%` }}
-                    ></div>
-                  </div>
+                  <div className="flex justify-between text-xs text-emerald-100 mb-1"><span>已用 {((currentMonthExpense/monthlyBudget)*100).toFixed(0)}%</span><span>预算 {monthlyBudget}</span></div>
+                  <div className="w-full bg-black/20 rounded-full h-2 overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 ease-out ${remainingBudget < 0 ? 'bg-red-400' : 'bg-white'}`} style={{ width: `${budgetProgress}%` }}></div></div>
                 </div>
               )}
-
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 hover:bg-white/20 transition-colors">
-                  <div className="flex items-center gap-1 text-emerald-100 text-xs mb-1"><TrendingDown size={12} /><span>本月支出</span></div>
-                  <div className="font-semibold text-lg"><CountUp end={currentMonthExpense} decimals={0} /></div>
-                </div>
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 hover:bg-white/20 transition-colors">
-                  <div className="flex items-center gap-1 text-emerald-100 text-xs mb-1"><TrendingUp size={12} /><span>本月收入</span></div>
-                  <div className="font-semibold text-lg"><CountUp end={currentMonthIncome} decimals={0} /></div>
-                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 hover:bg-white/20 transition-colors"><div className="flex items-center gap-1 text-emerald-100 text-xs mb-1"><TrendingDown size={12} /><span>本月支出</span></div><div className="font-semibold text-lg"><CountUp end={currentMonthExpense} decimals={0} /></div></div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 hover:bg-white/20 transition-colors"><div className="flex items-center gap-1 text-emerald-100 text-xs mb-1"><TrendingUp size={12} /><span>本月收入</span></div><div className="font-semibold text-lg"><CountUp end={currentMonthIncome} decimals={0} /></div></div>
               </div>
             </div>
           </div>
-
           <div className="px-4 mt-6">
-            <div className="flex justify-between items-end mb-4 px-1">
-              <h2 className="text-lg font-bold text-gray-800">近期账单</h2>
-            </div>
+            <div className="flex justify-between items-end mb-4 px-1"><h2 className="text-lg font-bold text-gray-800">近期账单</h2></div>
             <div className="pb-24">
               {transactions.length > 0 ? (
-                transactions.slice(0, 10).map((item, index) => (
-                  <TransactionItem key={item.id} item={item} index={index} onDelete={handleDeleteTransaction} />
-                ))
-              ) : (
-                <div className="text-center py-10 opacity-50 animate-fade-in"><p>暂无记录</p></div>
-              )}
+                transactions.slice(0, 10).map((item, index) => (<TransactionItem key={item.id} item={item} index={index} onDelete={handleDeleteTransaction} />))
+              ) : (<div className="text-center py-10 opacity-50 animate-fade-in"><p>暂无记录</p></div>)}
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'stats' && (
-        <StatsView 
-          transactions={transactions} 
-          onExport={handleExport}
-          onImportTrigger={() => jsonInputRef.current?.click()}
-        />
+        <StatsView transactions={transactions} onExport={handleExport} onImportTrigger={() => jsonInputRef.current?.click()} />
       )}
 
       <div className="fixed bottom-24 right-4 z-40 max-w-md w-full mx-auto pointer-events-none flex flex-col items-end gap-3 pr-8">
-        <button onClick={() => fileInputRef.current?.click()} className="pointer-events-auto bg-emerald-100 text-emerald-700 p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center hover:bg-emerald-200">
-          <Camera size={24} />
-        </button>
-        <button onClick={() => { setAiData(null); setShowAddModal(true); }} className="pointer-events-auto bg-gray-900 text-white p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center group hover:bg-black">
-          <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
-        </button>
+        <button onClick={() => fileInputRef.current?.click()} className="pointer-events-auto bg-emerald-100 text-emerald-700 p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center hover:bg-emerald-200"><Camera size={24} /></button>
+        <button onClick={() => { setAiData(null); setShowAddModal(true); }} className="pointer-events-auto bg-gray-900 text-white p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center group hover:bg-black"><Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" /></button>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 flex justify-around items-center z-30 max-w-md mx-auto">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-emerald-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}>
-          <Home size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
-          <span className="text-[10px] font-medium">明细</span>
-        </button>
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-emerald-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}><Home size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} /><span className="text-[10px] font-medium">明细</span></button>
         <div className="w-12"></div> 
-        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'stats' ? 'text-emerald-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}>
-          <PieChart size={24} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
-          <span className="text-[10px] font-medium">统计</span>
-        </button>
+        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'stats' ? 'text-emerald-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}><PieChart size={24} strokeWidth={activeTab === 'stats' ? 2.5 : 2} /><span className="text-[10px] font-medium">统计</span></button>
       </div>
 
       <AddTransactionModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAdd={handleAddTransaction} initialData={aiData} />
@@ -602,7 +682,6 @@ export default function App() {
         .animate-scale-up { animation: scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .animate-slide-in-up { animation: slideInUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; opacity: 0; transform: translateY(20px); }
         
-        /* 猪猪弹窗专属动画 */
         .animate-bounce-in { animation: bounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
         .animate-bounce-slow { animation: bounce 2s infinite; }
         .animate-progress { animation: progress 1.8s ease-out forwards; width: 0%; }
@@ -611,7 +690,6 @@ export default function App() {
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes slideInUp { to { opacity: 1; transform: translateY(0); } }
-        @keyframes fillWidth { to { width: var(--target-width); } }
         
         @keyframes bounceIn {
           0% { transform: scale(0); opacity: 0; }
