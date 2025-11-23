@@ -9,46 +9,70 @@ import {
 
 // --- ⚠️ 国内大模型 API 配置 ---
 const AI_CONFIG = {
-  apiKey: "ff1c9b7c8ede4bee994e030407396a75.8S73rNbiDENOJOcN", // 请务必填入您的 Key
+  // 请将此处替换为您申请的智谱 API Key (必填)
+  apiKey: "ff1c9b7c8ede4bee994e030407396a75.8S73rNbiDENOJOcN", 
+  
   baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+  
   model: "glm-4v-flash" 
+};
+
+// --- 开屏动画组件 ---
+const SplashScreen = () => {
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-600 to-teal-800 text-white">
+      <div className="p-5 bg-white/20 backdrop-blur-md rounded-3xl mb-6 shadow-2xl animate-bounce-in">
+        <Wallet size={64} className="text-white drop-shadow-md" />
+      </div>
+      <div className="text-center space-y-2">
+        <h1 className="text-4xl font-bold tracking-widest animate-slide-up" style={{ animationDelay: '0.2s' }}>简易记账</h1>
+        <p className="text-emerald-100 text-sm font-light tracking-wide animate-slide-up" style={{ animationDelay: '0.4s' }}>让每一笔开支都清晰可见</p>
+      </div>
+      <div className="absolute bottom-20 w-48 h-1.5 bg-emerald-900/30 rounded-full overflow-hidden">
+        <div className="h-full bg-emerald-200/80 rounded-full w-full animate-progress origin-left"></div>
+      </div>
+    </div>
+  );
+};
+
+// --- 🐷 新增：超支预警弹窗 ---
+const BudgetAlertModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white w-[280px] p-6 rounded-3xl shadow-2xl text-center animate-bounce-in border-4 border-rose-100">
+        <div className="text-6xl mb-4 animate-bounce-slow">🐷</div>
+        <h3 className="text-xl font-black text-gray-800 mb-2">王猪猪🐷</h3>
+        <p className="text-rose-500 font-bold text-lg mb-6">没钱用啦！💸</p>
+        <button 
+          onClick={onClose} 
+          className="w-full py-3 bg-gray-900 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg shadow-gray-300"
+        >
+          我知道了 😭
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // --- 动画组件：数字滚动 ---
 const CountUp = ({ end, duration = 1000, prefix = '', decimals = 2 }) => {
   const [count, setCount] = useState(0);
-  
   useEffect(() => {
     let startTime;
     let animationFrame;
-    
     const animate = (timestamp) => {
       if (!startTime) startTime = timestamp;
       const progress = timestamp - startTime;
-      // 使用 Ease Out Quart 缓动函数，让动画更自然
       const percentage = Math.min(progress / duration, 1);
       const ease = 1 - Math.pow(1 - percentage, 4);
-      
       setCount(end * ease);
-      
-      if (progress < duration) {
-        animationFrame = requestAnimationFrame(animate);
-      }
+      if (progress < duration) animationFrame = requestAnimationFrame(animate);
     };
-    
     animationFrame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrame);
   }, [end, duration]);
-
-  return (
-    <span>
-      {prefix}
-      {count.toLocaleString('zh-CN', { 
-        minimumFractionDigits: decimals, 
-        maximumFractionDigits: decimals 
-      })}
-    </span>
-  );
+  return <span>{prefix}{count.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}</span>;
 };
 
 // --- 配置数据 ---
@@ -70,108 +94,51 @@ const INCOME_CATEGORIES = [
 ];
 
 // --- 工具函数 ---
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount);
-};
-
+const formatCurrency = (amount) => new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount);
 const formatDate = (dateString) => {
   const date = new Date(dateString);
   const today = new Date();
   const isToday = date.toDateString() === today.toDateString();
-  if (isToday) return '今天';
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
+  return isToday ? '今天' : `${date.getMonth() + 1}月${date.getDate()}日`;
 };
-
 const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
-// --- AI 调用函数 ---
+// --- AI 调用 ---
 const callDomesticAI = async (base64Image) => {
-  const prompt = `
-  你是一个智能记账助手。请分析这张收据或账单截图。
-  请提取以下信息并严格以 JSON 格式返回：
-  {
-    "type": "expense" (支出) 或 "income" (收入),
-    "amount": 金额 (数字，不要符号),
-    "category": "分类ID (从 food, transport, shopping, entertainment, housing, medical, other_expense, salary, bonus, investment, other_income 中选)",
-    "date": "YYYY-MM-DD" (默认今年/今天),
-    "note": "简短备注"
-  }
-  `;
-
+  const prompt = `你是一个智能记账助手。请分析这张收据或账单截图。提取以下信息并严格以 JSON 格式返回：{ "type": "expense" (支出) 或 "income" (收入), "amount": 金额 (数字，不要符号), "category": "分类ID (从 food, transport, shopping, entertainment, housing, medical, other_expense, salary, bonus, investment, other_income 中选)", "date": "YYYY-MM-DD" (默认今年/今天), "note": "简短备注" }`;
   const payload = {
     model: AI_CONFIG.model,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: prompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
-        ]
-      }
-    ]
+    messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }] }]
   };
-
   try {
     const response = await fetch(AI_CONFIG.baseUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${AI_CONFIG.apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AI_CONFIG.apiKey}` },
       body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      const errData = await response.text();
-      throw new Error(`API Error: ${response.status} - ${errData}`);
-    }
-
+    if (!response.ok) throw new Error(`API Error`);
     const data = await response.json();
-    const content = data.choices[0].message.content;
-    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleanJson = data.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanJson);
-  } catch (error) {
-    console.error("AI Request Failed:", error);
-    throw error;
-  }
+  } catch (error) { throw error; }
 };
 
-// --- 组件 ---
-
-// 账单列表项：增加了 index 参数用于实现错峰动画
+// --- 子组件 ---
 const TransactionItem = ({ item, onDelete, index }) => {
   const isExpense = item.type === 'expense';
   const categoryList = isExpense ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
   const category = categoryList.find(c => c.id === item.category) || categoryList[categoryList.length - 1];
   const Icon = category.icon;
-
   return (
-    <div 
-      className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm border border-gray-100 mb-3 transition-all hover:shadow-md active:scale-[0.99] animate-slide-in-up"
-      style={{ animationDelay: `${index * 0.05}s`, animationFillMode: 'both' }}
-    >
+    <div className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm border border-gray-100 mb-3 transition-all hover:shadow-md active:scale-[0.99] animate-slide-in-up" style={{ animationDelay: `${index * 0.05}s`, animationFillMode: 'both' }}>
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-full ${category.color} transition-transform hover:rotate-12`}>
-          <Icon size={20} />
-        </div>
-        <div className="flex flex-col">
-          <span className="font-medium text-gray-800">{category.name}</span>
-          <span className="text-xs text-gray-400">
-            {formatDate(item.date)} {item.note && `· ${item.note}`}
-          </span>
-        </div>
+        <div className={`p-2 rounded-full ${category.color} transition-transform hover:rotate-12`}><Icon size={20} /></div>
+        <div className="flex flex-col"><span className="font-medium text-gray-800">{category.name}</span><span className="text-xs text-gray-400">{formatDate(item.date)} {item.note && `· ${item.note}`}</span></div>
       </div>
       <div className="flex items-center gap-3">
-        <span className={`font-bold ${isExpense ? 'text-gray-900' : 'text-emerald-600'}`}>
-          {isExpense ? '-' : '+'}{formatCurrency(item.amount).replace('CN¥', '')}
-        </span>
-        <button 
-          onClick={() => onDelete(item.id)} 
-          className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"
-        >
-          <Trash2 size={16} />
-        </button>
+        <span className={`font-bold ${isExpense ? 'text-gray-900' : 'text-emerald-600'}`}>{isExpense ? '-' : '+'}{formatCurrency(item.amount).replace('CN¥', '')}</span>
+        <button onClick={() => onDelete(item.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"><Trash2 size={16} /></button>
       </div>
     </div>
   );
@@ -179,25 +146,15 @@ const TransactionItem = ({ item, onDelete, index }) => {
 
 const BudgetModal = ({ isOpen, onClose, currentBudget, onSave }) => {
   const [amount, setAmount] = useState(currentBudget);
-
   useEffect(() => { setAmount(currentBudget) }, [currentBudget, isOpen]);
-
   if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-opacity animate-fade-in">
       <div className="bg-white w-[300px] p-6 rounded-2xl shadow-2xl animate-scale-up">
         <h3 className="text-lg font-bold mb-4 text-gray-800">设置每月预算</h3>
         <div className="relative mb-6">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl font-bold text-gray-400">¥</span>
-          <input 
-            type="number" 
-            value={amount} 
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full pl-8 pr-3 py-3 bg-gray-50 rounded-xl text-2xl font-bold border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all"
-            autoFocus
-            placeholder="0"
-          />
+          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full pl-8 pr-3 py-3 bg-gray-50 rounded-xl text-2xl font-bold border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all" autoFocus placeholder="0" />
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium text-gray-600 transition-colors">取消</button>
@@ -214,44 +171,24 @@ const CalendarWidget = ({ currentDate, transactions, onDateSelect }) => {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
   const days = [];
-
-  for (let i = 0; i < firstDay; i++) {
-    days.push(<div key={`empty-${i}`} className="h-10"></div>);
-  }
-  
+  for (let i = 0; i < firstDay; i++) days.push(<div key={`empty-${i}`} className="h-10"></div>);
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dailyTrans = transactions.filter(t => t.date === dateStr);
     const hasIncome = dailyTrans.some(t => t.type === 'income');
     const dailyExpense = dailyTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-
     days.push(
-      <div 
-        key={d} 
-        className="flex flex-col items-center justify-start h-12 py-1 relative cursor-pointer hover:bg-emerald-50 rounded-xl transition-colors group" 
-        onClick={() => onDateSelect && onDateSelect(dateStr)}
-      >
+      <div key={d} className="flex flex-col items-center justify-start h-12 py-1 relative cursor-pointer hover:bg-emerald-50 rounded-xl transition-colors group" onClick={() => onDateSelect && onDateSelect(dateStr)}>
         <span className={`text-xs font-medium transition-colors ${dailyTrans.length > 0 ? 'text-gray-900 group-hover:text-emerald-700' : 'text-gray-400'}`}>{d}</span>
-        {dailyExpense > 0 && (
-          <span className="text-[8px] text-rose-500 font-bold -mt-0.5 scale-90 origin-top">-{Math.round(dailyExpense)}</span>
-        )}
-        {hasIncome && !dailyExpense && (
-           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shadow-sm"></div>
-        )}
+        {dailyExpense > 0 && <span className="text-[8px] text-rose-500 font-bold -mt-0.5 scale-90 origin-top">-{Math.round(dailyExpense)}</span>}
+        {hasIncome && !dailyExpense && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shadow-sm"></div>}
       </div>
     );
   }
-
   return (
     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-4 animate-slide-in-up">
-      <div className="grid grid-cols-7 gap-1 text-center mb-2">
-        {['日', '一', '二', '三', '四', '五', '六'].map(day => (
-          <div key={day} className="text-xs text-gray-400 font-medium">{day}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {days}
-      </div>
+      <div className="grid grid-cols-7 gap-1 text-center mb-2">{['日', '一', '二', '三', '四', '五', '六'].map(day => <div key={day} className="text-xs text-gray-400 font-medium">{day}</div>)}</div>
+      <div className="grid grid-cols-7 gap-1">{days}</div>
     </div>
   );
 };
@@ -259,26 +196,18 @@ const CalendarWidget = ({ currentDate, transactions, onDateSelect }) => {
 const StatsView = ({ transactions, onExport, onImportTrigger }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState('expense');
-
   const monthlyTransactions = transactions.filter(t => {
     const tDate = new Date(t.date);
     return tDate.getMonth() === currentDate.getMonth() && tDate.getFullYear() === currentDate.getFullYear();
   });
-
   const filteredByType = monthlyTransactions.filter(t => t.type === viewType);
   const total = filteredByType.reduce((acc, curr) => acc + curr.amount, 0);
-  const categoryTotals = filteredByType.reduce((acc, curr) => {
-    acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
-    return acc;
-  }, {});
+  const categoryTotals = filteredByType.reduce((acc, curr) => { acc[curr.category] = (acc[curr.category] || 0) + curr.amount; return acc; }, {});
   const categoryList = viewType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-  const statsData = Object.entries(categoryTotals)
-    .map(([catId, amount]) => {
-      const catInfo = categoryList.find(c => c.id === catId) || { name: '其他', color: 'bg-gray-100', icon: MoreHorizontal };
-      return { ...catInfo, amount, percentage: total === 0 ? 0 : (amount / total) * 100 };
-    })
-    .sort((a, b) => b.amount - a.amount);
-
+  const statsData = Object.entries(categoryTotals).map(([catId, amount]) => {
+    const catInfo = categoryList.find(c => c.id === catId) || { name: '其他', color: 'bg-gray-100', icon: MoreHorizontal };
+    return { ...catInfo, amount, percentage: total === 0 ? 0 : (amount / total) * 100 };
+  }).sort((a, b) => b.amount - a.amount);
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
 
@@ -286,80 +215,32 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
     <div className="pb-24 animate-fade-in px-4 pt-4">
       <div className="flex items-center justify-between mb-4">
         <button onClick={prevMonth} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 hover:scale-110 transition-all"><ChevronLeft size={20} /></button>
-        <div className="text-lg font-bold text-gray-800 flex items-center gap-2 transition-all" key={currentDate.toString()}>
-           <CalendarIcon size={18} className="text-emerald-600"/>
-           {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
-        </div>
+        <div className="text-lg font-bold text-gray-800 flex items-center gap-2 transition-all" key={currentDate.toString()}><CalendarIcon size={18} className="text-emerald-600"/>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</div>
         <button onClick={nextMonth} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50 hover:scale-110 transition-all"><ChevronRight size={20} /></button>
       </div>
-
       <CalendarWidget currentDate={currentDate} transactions={monthlyTransactions} />
-
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-4 animate-slide-in-up" style={{ animationDelay: '0.1s', animationFillMode: 'both' }}>
         <div className="flex bg-gray-100 p-1 rounded-xl mb-4 w-full">
-          <button 
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${viewType === 'expense' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setViewType('expense')}
-          >
-            本月支出
-          </button>
-          <button 
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${viewType === 'income' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-            onClick={() => setViewType('income')}
-          >
-            本月收入
-          </button>
+          <button className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${viewType === 'expense' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setViewType('expense')}>本月支出</button>
+          <button className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 ${viewType === 'income' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => setViewType('income')}>本月收入</button>
         </div>
-        <div className="text-center">
-           <div className="text-3xl font-bold text-gray-900">
-             <CountUp end={total} prefix="¥" />
-           </div>
-        </div>
+        <div className="text-center"><div className="text-3xl font-bold text-gray-900"><CountUp end={total} prefix="¥" /></div></div>
       </div>
-
       <div className="space-y-3 mb-8">
         {statsData.map((stat, idx) => (
-          <div 
-            key={stat.id} 
-            className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center gap-3 animate-slide-in-up hover:shadow-md transition-shadow"
-            style={{ animationDelay: `${0.2 + idx * 0.05}s`, animationFillMode: 'both' }}
-          >
-             <div className={`p-2 rounded-full ${stat.color} bg-opacity-20`}>
-                <stat.icon size={16} />
-             </div>
-             <div className="flex-1">
-               <div className="flex justify-between text-sm mb-1">
-                 <span className="font-medium">{stat.name}</span>
-                 <span className="font-bold">{formatCurrency(stat.amount)}</span>
-               </div>
-               <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-1000 ease-out ${viewType === 'expense' ? 'bg-rose-500' : 'bg-emerald-500'}`} 
-                  style={{ width: '0%', animation: `fillWidth 1s ease-out forwards`, '--target-width': `${stat.percentage}%` }}
-                ></div>
-               </div>
-             </div>
+          <div key={stat.id} className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center gap-3 animate-slide-in-up hover:shadow-md transition-shadow" style={{ animationDelay: `${0.2 + idx * 0.05}s`, animationFillMode: 'both' }}>
+             <div className={`p-2 rounded-full ${stat.color} bg-opacity-20`}><stat.icon size={16} /></div>
+             <div className="flex-1"><div className="flex justify-between text-sm mb-1"><span className="font-medium">{stat.name}</span><span className="font-bold">{formatCurrency(stat.amount)}</span></div>
+               <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 ease-out ${viewType === 'expense' ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: '0%', animation: `fillWidth 1s ease-out forwards`, '--target-width': `${stat.percentage}%` }}></div></div></div>
           </div>
         ))}
-        {statsData.length === 0 && (
-          <div className="text-center py-8 text-gray-400 text-sm flex flex-col items-center animate-fade-in">
-            <PieChart size={32} className="mb-2 opacity-20" />
-            本月没有{viewType === 'expense' ? '支出' : '收入'}记录
-          </div>
-        )}
+        {statsData.length === 0 && <div className="text-center py-8 text-gray-400 text-sm flex flex-col items-center animate-fade-in"><PieChart size={32} className="mb-2 opacity-20" />本月没有{viewType === 'expense' ? '支出' : '收入'}记录</div>}
       </div>
-
       <div className="border-t border-gray-200 pt-6 pb-4 animate-fade-in" style={{ animationDelay: '0.5s', animationFillMode: 'both' }}>
         <h3 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider ml-1">数据管理</h3>
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={onExport} className="flex items-center justify-center gap-2 bg-white border border-gray-200 p-3 rounded-xl text-gray-600 hover:bg-gray-50 active:scale-95 transition-all hover:border-emerald-200">
-            <Download size={16} />
-            <span className="text-xs font-medium">导出备份</span>
-          </button>
-          <button onClick={onImportTrigger} className="flex items-center justify-center gap-2 bg-white border border-gray-200 p-3 rounded-xl text-gray-600 hover:bg-gray-50 active:scale-95 transition-all hover:border-emerald-200">
-            <Upload size={16} />
-            <span className="text-xs font-medium">恢复数据</span>
-          </button>
+          <button onClick={onExport} className="flex items-center justify-center gap-2 bg-white border border-gray-200 p-3 rounded-xl text-gray-600 hover:bg-gray-50 active:scale-95 transition-all hover:border-emerald-200"><Download size={16} /><span className="text-xs font-medium">导出备份</span></button>
+          <button onClick={onImportTrigger} className="flex items-center justify-center gap-2 bg-white border border-gray-200 p-3 rounded-xl text-gray-600 hover:bg-gray-50 active:scale-95 transition-all hover:border-emerald-200"><Upload size={16} /><span className="text-xs font-medium">恢复数据</span></button>
         </div>
       </div>
     </div>
@@ -393,30 +274,19 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
 
   useEffect(() => {
     if (!initialData && isOpen) {
-        if (type === 'expense' && !EXPENSE_CATEGORIES.find(c => c.id === category)) {
-            setCategory(EXPENSE_CATEGORIES[0].id);
-        } else if (type === 'income' && !INCOME_CATEGORIES.find(c => c.id === category)) {
-            setCategory(INCOME_CATEGORIES[0].id);
-        }
+        if (type === 'expense' && !EXPENSE_CATEGORIES.find(c => c.id === category)) { setCategory(EXPENSE_CATEGORIES[0].id); } 
+        else if (type === 'income' && !INCOME_CATEGORIES.find(c => c.id === category)) { setCategory(INCOME_CATEGORIES[0].id); }
     }
   }, [type, isOpen, category, initialData]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
-    onAdd({
-      id: Date.now().toString(),
-      type,
-      amount: parseFloat(amount),
-      category,
-      date,
-      note
-    });
+    onAdd({ id: Date.now().toString(), type, amount: parseFloat(amount), category, date, note });
     onClose();
   };
 
   if (!isOpen) return null;
-
   const currentCategories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
 
   return (
@@ -425,23 +295,14 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-gray-800">记一笔</h2>
-            {initialData && (
-              <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-1 rounded-full flex items-center gap-1 font-medium animate-pulse">
-                <Sparkles size={10} />
-                AI已识别
-              </span>
-            )}
+            {initialData && <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-1 rounded-full flex items-center gap-1 font-medium animate-pulse"><Sparkles size={10} />AI已识别</span>}
           </div>
-          <button onClick={onClose} className="p-1 bg-gray-100 rounded-full hover:bg-gray-200 hover:rotate-90 transition-all">
-            <X size={20} className="text-gray-600" />
-          </button>
+          <button onClick={onClose} className="p-1 bg-gray-100 rounded-full hover:bg-gray-200 hover:rotate-90 transition-all"><X size={20} className="text-gray-600" /></button>
         </div>
-
         <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
           <button className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-300 ${type === 'expense' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`} onClick={() => setType('expense')}>支出</button>
           <button className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-300 ${type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500'}`} onClick={() => setType('income')}>收入</button>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs text-gray-400 font-medium ml-1">金额</label>
@@ -450,7 +311,6 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
               <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full pl-8 pr-4 py-3 bg-gray-50 border-none rounded-xl text-2xl font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" autoFocus />
             </div>
           </div>
-
           <div>
              <label className="text-xs text-gray-400 font-medium ml-1">分类</label>
              <div className="grid grid-cols-4 gap-3 mt-2">
@@ -462,18 +322,10 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
                ))}
              </div>
           </div>
-
           <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-xs text-gray-400 font-medium ml-1">日期</label>
-              <div className="relative mt-1"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/></div>
-            </div>
-            <div className="flex-[2]">
-              <label className="text-xs text-gray-400 font-medium ml-1">备注 (选填)</label>
-              <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：晚餐 AA" className="w-full mt-1 px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/>
-            </div>
+            <div className="flex-1"><label className="text-xs text-gray-400 font-medium ml-1">日期</label><div className="relative mt-1"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/></div></div>
+            <div className="flex-[2]"><label className="text-xs text-gray-400 font-medium ml-1">备注 (选填)</label><input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：晚餐 AA" className="w-full mt-1 px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/></div>
           </div>
-
           <button type="submit" className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all mt-4">确认</button>
         </form>
       </div>
@@ -482,6 +334,7 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
 };
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true); 
   const [activeTab, setActiveTab] = useState('home'); 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -489,11 +342,20 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [monthlyBudget, setMonthlyBudget] = useState(0); 
   const [loaded, setLoaded] = useState(false);
-  
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiData, setAiData] = useState(null);
+  
+  // 🚨 新增：猪猪超支预警状态 🚨
+  const [showBudgetAlert, setShowBudgetAlert] = useState(false);
+  const [budgetAlertDismissed, setBudgetAlertDismissed] = useState(false);
+
   const fileInputRef = useRef(null);
   const jsonInputRef = useRef(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 2200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     try {
@@ -517,6 +379,28 @@ export default function App() {
       localStorage.setItem('expense_monthly_budget', monthlyBudget.toString());
     }
   }, [transactions, monthlyBudget, loaded]);
+
+  // 计算当前剩余预算 (用于触发猪猪弹窗)
+  const now = new Date();
+  const currentMonthExpense = transactions.filter(t => {
+     const d = new Date(t.date);
+     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && t.type === 'expense';
+  }).reduce((sum, t) => sum + t.amount, 0);
+  
+  const remainingBudget = monthlyBudget - currentMonthExpense;
+
+  // 🐷 猪猪监听器：没钱了就报警！
+  useEffect(() => {
+    if (monthlyBudget > 0 && remainingBudget < 0 && !budgetAlertDismissed) {
+      setShowBudgetAlert(true);
+    }
+    // 如果预算恢复正数，重置“已忽略”状态
+    if (remainingBudget >= 0) {
+      setBudgetAlertDismissed(false);
+    }
+  }, [remainingBudget, monthlyBudget, budgetAlertDismissed]);
+
+  if (showSplash) return <SplashScreen />;
 
   const handleAddTransaction = (newTransaction) => {
     setTransactions(prev => [newTransaction, ...prev]);
@@ -584,18 +468,15 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const now = new Date();
-  const currentMonthTransactions = transactions.filter(t => {
+  const currentMonthIncome = transactions.filter(t => {
      const d = new Date(t.date);
-     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const currentMonthExpense = currentMonthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-  const currentMonthIncome = currentMonthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const remainingBudget = monthlyBudget - currentMonthExpense;
+     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && t.type === 'income';
+  }).reduce((sum, t) => sum + t.amount, 0);
+  
   const budgetProgress = monthlyBudget > 0 ? Math.min((currentMonthExpense / monthlyBudget) * 100, 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-100">
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-100 animate-fade-in">
       
       <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
       <input type="file" accept=".json" ref={jsonInputRef} className="hidden" onChange={handleImport} />
@@ -609,13 +490,17 @@ export default function App() {
         </div>
       )}
 
+      {/* 🐷 猪猪弹窗 */}
+      <BudgetAlertModal 
+        isOpen={showBudgetAlert} 
+        onClose={() => { setShowBudgetAlert(false); setBudgetAlertDismissed(true); }} 
+      />
+
       {activeTab === 'home' && (
         <div className="animate-fade-in">
-          {/* Header Card */}
-          <div className="bg-emerald-600 text-white p-6 rounded-b-[2.5rem] shadow-lg shadow-emerald-200 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-xl animate-pulse"></div>
-            {/* 流光特效 */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer"></div>
+          {/* Header Card (Removed Shimmer & Pulse) */}
+          <div className="bg-emerald-600 text-white p-6 rounded-b-[2.5rem] shadow-lg shadow-emerald-200 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-xl"></div>
             
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-4">
@@ -687,7 +572,6 @@ export default function App() {
         />
       )}
 
-      {/* FAB */}
       <div className="fixed bottom-24 right-4 z-40 max-w-md w-full mx-auto pointer-events-none flex flex-col items-end gap-3 pr-8">
         <button onClick={() => fileInputRef.current?.click()} className="pointer-events-auto bg-emerald-100 text-emerald-700 p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center hover:bg-emerald-200">
           <Camera size={24} />
@@ -697,7 +581,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 flex justify-around items-center z-30 max-w-md mx-auto">
         <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-emerald-600 scale-110' : 'text-gray-400 hover:text-gray-600'}`}>
           <Home size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
@@ -718,14 +601,27 @@ export default function App() {
         .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .animate-scale-up { animation: scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .animate-slide-in-up { animation: slideInUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; opacity: 0; transform: translateY(20px); }
-        .animate-shimmer { animation: shimmer 2s infinite; }
         
+        /* 猪猪弹窗专属动画 */
+        .animate-bounce-in { animation: bounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        .animate-bounce-slow { animation: bounce 2s infinite; }
+        .animate-progress { animation: progress 1.8s ease-out forwards; width: 0%; }
+
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes scaleUp { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes slideInUp { to { opacity: 1; transform: translateY(0); } }
-        @keyframes shimmer { 100% { transform: translateX(100%); } }
         @keyframes fillWidth { to { width: var(--target-width); } }
+        
+        @keyframes bounceIn {
+          0% { transform: scale(0); opacity: 0; }
+          60% { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1); }
+        }
+        @keyframes progress {
+          0% { width: 0%; }
+          100% { width: 100%; }
+        }
       `}</style>
     </div>
   );
