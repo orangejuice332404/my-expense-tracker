@@ -3,18 +3,17 @@ import {
   Plus, Wallet, TrendingUp, TrendingDown, PieChart, Home, Trash2, 
   Utensils, Bus, ShoppingBag, Coffee, Home as HouseIcon, Stethoscope, 
   Briefcase, Gift, CreditCard, MoreHorizontal, X, Camera, Loader2, Sparkles,
-  Download, Upload, ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon,
-  FileJson
+  Download, Upload, ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon
 } from 'lucide-react';
 
 // --- ⚠️ 国内大模型 API 配置 ---
 const AI_CONFIG = {
-  // 请将此处替换为您申请的智谱 API Key
+  // 请将此处替换为您申请的智谱 API Key (必填)
   apiKey: "ff1c9b7c8ede4bee994e030407396a75.8S73rNbiDENOJOcN", 
   
   baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
   
-  // ✅ 已根据您的要求，修改为 GLM-4.5-Flash
+  // ✅ 已配置为 GLM-4.5-Flash
   model: "glm-4.5-flash" 
 };
 
@@ -58,13 +57,13 @@ const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 const callDomesticAI = async (base64Image) => {
   const prompt = `
   你是一个智能记账助手。请分析这张收据或账单截图。
-  请提取以下信息并严格以 JSON 格式返回：
+  请提取以下信息并严格以 JSON 格式返回（不要包含 markdown 代码块标记，只返回纯 JSON 字符串）：
   {
     "type": "expense" (支出) 或 "income" (收入),
     "amount": 金额 (数字，不要符号),
-    "category": "分类ID (从 food, transport, shopping, entertainment, housing, medical, other_expense, salary, bonus, investment, other_income 中选)",
-    "date": "YYYY-MM-DD" (默认今年/今天),
-    "note": "简短备注"
+    "category": "分类ID (必须是以下之一: food, transport, shopping, entertainment, housing, medical, other_expense, salary, bonus, investment, other_income)",
+    "date": "YYYY-MM-DD" (如果图中无年份默认今年，无日期默认今天),
+    "note": "简短备注 (商家名或商品名)"
   }
   `;
 
@@ -91,17 +90,23 @@ const callDomesticAI = async (base64Image) => {
       body: JSON.stringify(payload)
     });
 
-    if (!response.ok) throw new Error("API Error");
+    if (!response.ok) {
+      const errData = await response.text();
+      throw new Error(`API Error: ${response.status} - ${errData}`);
+    }
+
     const data = await response.json();
     const content = data.choices[0].message.content;
+    // 清洗数据，防止模型返回 markdown 格式
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanJson);
   } catch (error) {
+    console.error("AI Request Failed:", error);
     throw error;
   }
 };
 
-// --- 子组件 ---
+// --- 组件 ---
 
 const TransactionItem = ({ item, onDelete }) => {
   const isExpense = item.type === 'expense';
@@ -151,6 +156,7 @@ const BudgetModal = ({ isOpen, onClose, currentBudget, onSave }) => {
           onChange={(e) => setAmount(e.target.value)}
           className="w-full p-3 bg-gray-50 rounded-xl mb-4 text-xl font-bold border border-gray-200 focus:border-emerald-500 outline-none"
           autoFocus
+          placeholder="0"
         />
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2 bg-gray-100 rounded-lg font-medium text-gray-600">取消</button>
@@ -169,12 +175,12 @@ const CalendarWidget = ({ currentDate, transactions, onDateSelect }) => {
   const firstDay = getFirstDayOfMonth(year, month);
   
   const days = [];
-  // Empty slots for days before the 1st
+  // 填充月初空白
   for (let i = 0; i < firstDay; i++) {
     days.push(<div key={`empty-${i}`} className="h-10"></div>);
   }
   
-  // Day cells
+  // 渲染每一天
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dailyTrans = transactions.filter(t => t.date === dateStr);
@@ -208,11 +214,12 @@ const CalendarWidget = ({ currentDate, transactions, onDateSelect }) => {
   );
 };
 
-// 增加 onExport 和 onImportTrigger 属性
+// 统计页面组件 (包含日历、图表和数据备份)
 const StatsView = ({ transactions, onExport, onImportTrigger }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState('expense');
 
+  // 筛选当前选中月份的账单
   const monthlyTransactions = transactions.filter(t => {
     const tDate = new Date(t.date);
     return tDate.getMonth() === currentDate.getMonth() && tDate.getFullYear() === currentDate.getFullYear();
@@ -237,6 +244,7 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
 
   return (
     <div className="pb-24 animate-fade-in px-4 pt-4">
+      {/* 月份切换器 */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={prevMonth} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50"><ChevronLeft size={20} /></button>
         <div className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -246,11 +254,13 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
         <button onClick={nextMonth} className="p-2 bg-white rounded-full shadow-sm hover:bg-gray-50"><ChevronRight size={20} /></button>
       </div>
 
+      {/* 日历组件 */}
       <CalendarWidget 
         currentDate={currentDate} 
         transactions={monthlyTransactions} 
       />
 
+      {/* 总览卡片 */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-4">
         <div className="flex bg-gray-100 p-1 rounded-lg mb-4 w-full">
           <button 
@@ -271,6 +281,7 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
         </div>
       </div>
 
+      {/* 排行榜列表 */}
       <div className="space-y-3 mb-8">
         {statsData.map((stat) => (
           <div key={stat.id} className="bg-white p-3 rounded-xl border border-gray-100 flex items-center gap-3">
@@ -293,7 +304,7 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
         )}
       </div>
 
-      {/* --- 新增：数据管理/备份区域 --- */}
+      {/* --- 数据管理/备份区域 --- */}
       <div className="border-t border-gray-200 pt-6 pb-4">
         <h3 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">数据管理 (防丢失)</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -412,6 +423,7 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Amount Input */}
           <div>
             <label className="text-xs text-gray-400 font-medium ml-1">金额</label>
             <div className="relative mt-1">
@@ -428,12 +440,15 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
             </div>
           </div>
 
+          {/* Categories Grid */}
           <div>
              <label className="text-xs text-gray-400 font-medium ml-1">分类</label>
              <div className="grid grid-cols-4 gap-3 mt-2">
                {currentCategories.map((cat) => (
                  <button
-                   key={cat.id} type="button" onClick={() => setCategory(cat.id)}
+                   key={cat.id}
+                   type="button"
+                   onClick={() => setCategory(cat.id)}
                    className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${category === cat.id ? 'bg-emerald-50 ring-2 ring-emerald-500' : 'hover:bg-gray-50'}`}
                  >
                    <div className={`p-2 rounded-full ${cat.color} bg-opacity-50`}>
@@ -445,6 +460,7 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
              </div>
           </div>
 
+          {/* Date & Note */}
           <div className="flex gap-3">
             <div className="flex-1">
               <label className="text-xs text-gray-400 font-medium ml-1">日期</label>
@@ -469,7 +485,11 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
             </div>
           </div>
 
-          <button type="submit" className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all mt-4">
+          {/* Submit Button */}
+          <button 
+            type="submit"
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all mt-4"
+          >
             确认
           </button>
         </form>
@@ -479,9 +499,10 @@ const AddTransactionModal = ({ isOpen, onClose, onAdd, initialData }) => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home'); 
+  // State
+  const [activeTab, setActiveTab] = useState('home'); // 'home', 'stats'
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false); // 新增：预算弹窗控制
   
   const [transactions, setTransactions] = useState([]);
   const [monthlyBudget, setMonthlyBudget] = useState(0); // 新增：月预算状态
@@ -489,29 +510,36 @@ export default function App() {
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiData, setAiData] = useState(null);
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef(null); // For Camera
   const jsonInputRef = useRef(null); // 新增：JSON 导入引用
 
-  // Load data
+  // Load data from LocalStorage
   useEffect(() => {
     try {
       const savedData = localStorage.getItem('expense_tracker_data');
-      if (savedData) setTransactions(JSON.parse(savedData));
-      else {
-        // Init Data
+      if (savedData) {
+        setTransactions(JSON.parse(savedData));
+      } else {
+        // Initial Demo Data
         setTransactions([
           { id: '1', type: 'expense', amount: 35.00, category: 'food', date: new Date().toISOString().split('T')[0], note: '午餐' },
-          { id: '2', type: 'expense', amount: 4.00, category: 'transport', date: new Date().toISOString().split('T')[0], note: '地铁' }
+          { id: '2', type: 'expense', amount: 4.00, category: 'transport', date: new Date().toISOString().split('T')[0], note: '地铁' },
+          { id: '3', type: 'income', amount: 8500.00, category: 'salary', date: new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0], note: '三月工资' },
         ]);
       }
 
+      // Load Budget
       const savedBudget = localStorage.getItem('expense_monthly_budget');
-      if (savedBudget) setMonthlyBudget(Number(savedBudget));
-    } catch (e) { console.error(e); }
+      if (savedBudget) {
+        setMonthlyBudget(Number(savedBudget));
+      }
+    } catch (e) {
+      console.error("Storage access error", e);
+    }
     setLoaded(true);
   }, []);
 
-  // Save data
+  // Save data to LocalStorage
   useEffect(() => {
     if (loaded) {
       localStorage.setItem('expense_tracker_data', JSON.stringify(transactions));
@@ -521,7 +549,7 @@ export default function App() {
 
   const handleAddTransaction = (newTransaction) => {
     setTransactions(prev => [newTransaction, ...prev]);
-    setAiData(null); 
+    setAiData(null); // Clear AI data after add
   };
 
   const handleDeleteTransaction = (id) => {
@@ -530,8 +558,12 @@ export default function App() {
     }
   };
 
-  const handleImportData = (newData) => { setTransactions(newData); };
+  // Manual Import Logic
+  const handleImportData = (newData) => {
+    setTransactions(newData);
+  };
   
+  // Export Handler
   const handleExport = () => {
     const dataStr = JSON.stringify(transactions, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
@@ -542,9 +574,11 @@ export default function App() {
     link.click();
   };
 
+  // Import Handler
   const handleImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -554,31 +588,46 @@ export default function App() {
              handleImportData(importedData);
              alert("恢复成功！");
            }
-        } else { alert("文件格式错误"); }
-      } catch (err) { alert("文件解析失败"); }
+        } else {
+          alert("文件格式不正确");
+        }
+      } catch (err) {
+        alert("文件解析失败");
+      }
     };
     reader.readAsText(file);
+    // Reset input
     if (jsonInputRef.current) jsonInputRef.current.value = '';
   };
 
+  // Handle Image Upload & AI Analysis
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // 简单校验 Key
     if (!AI_CONFIG.apiKey || AI_CONFIG.apiKey === "YOUR_API_KEY_HERE") {
-      alert("请配置 API Key"); return;
+      alert("请先在代码中配置您的国内大模型 API Key");
+      return;
     }
+
     setIsAnalyzing(true);
+    
+    // Convert to Base64
     const reader = new FileReader();
     reader.onloadend = async () => {
+      const base64String = reader.result.split(',')[1]; // Remove prefix
       try {
-        const result = await callDomesticAI(reader.result.split(',')[1]);
+        const result = await callDomesticAI(base64String);
         setAiData(result);
         setShowAddModal(true);
       } catch (error) {
-        alert("识别失败: " + error.message);
-        setShowAddModal(true);
+        console.error("AI Analysis failed:", error);
+        alert(`识别失败：${error.message || "请检查网络或Key是否正确"}`);
+        setShowAddModal(true); // Still open modal even if AI fails
       } finally {
         setIsAnalyzing(false);
+        // Reset file input so same file can be selected again if needed
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
@@ -601,24 +650,40 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-gray-100">
       
       {/* Hidden Inputs */}
-      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
-      <input type="file" accept=".json" ref={jsonInputRef} className="hidden" onChange={handleImport} />
+      <input 
+        type="file" 
+        accept="image/*" 
+        ref={fileInputRef} 
+        className="hidden" 
+        onChange={handleImageUpload}
+      />
+      <input 
+        type="file" 
+        accept=".json" 
+        ref={jsonInputRef} 
+        className="hidden" 
+        onChange={handleImport} 
+      />
 
+      {/* Loading Overlay */}
       {isAnalyzing && (
         <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
            <div className="bg-white p-6 rounded-2xl flex flex-col items-center animate-bounce-slow">
              <Loader2 size={32} className="animate-spin text-emerald-600 mb-3" />
              <p className="font-bold text-gray-800">AI 正在识别账单...</p>
+             <p className="text-xs text-gray-500 mt-1">使用 {AI_CONFIG.model} 分析中</p>
            </div>
         </div>
       )}
 
+      {/* --- Main Content Area --- */}
       {activeTab === 'home' && (
         <div className="animate-fade-in">
           {/* Header Card with Budget */}
           <div className="bg-emerald-600 text-white p-6 rounded-b-[2.5rem] shadow-lg shadow-emerald-200 relative overflow-hidden">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-xl"></div>
-            
+            <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 rounded-full bg-black opacity-5 blur-xl"></div>
+
             <div className="relative z-10">
               <div className="flex justify-between items-start mb-4">
                  <div onClick={() => setShowBudgetModal(true)} className="cursor-pointer active:opacity-80 transition-opacity">
@@ -636,6 +701,7 @@ export default function App() {
                  </div>
               </div>
 
+              {/* Budget Progress Bar */}
               {monthlyBudget > 0 && (
                 <div className="mb-6">
                   <div className="flex justify-between text-xs text-emerald-100 mb-1">
@@ -653,28 +719,44 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                  <div className="flex items-center gap-1 text-emerald-100 text-xs mb-1"><TrendingDown size={12} /><span>本月支出</span></div>
+                  <div className="flex items-center gap-1 text-emerald-100 text-xs mb-1">
+                    <TrendingDown size={12} />
+                    <span>本月支出</span>
+                  </div>
                   <div className="font-semibold text-lg">{currentMonthExpense.toLocaleString()}</div>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                  <div className="flex items-center gap-1 text-emerald-100 text-xs mb-1"><TrendingUp size={12} /><span>本月收入</span></div>
+                  <div className="flex items-center gap-1 text-emerald-100 text-xs mb-1">
+                    <TrendingUp size={12} />
+                    <span>本月收入</span>
+                  </div>
                   <div className="font-semibold text-lg">{currentMonthIncome.toLocaleString()}</div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Transactions List */}
           <div className="px-4 mt-6">
             <div className="flex justify-between items-end mb-4 px-1">
               <h2 className="text-lg font-bold text-gray-800">近期账单</h2>
+              <span className="text-xs text-gray-400">最近 {transactions.length} 笔</span>
             </div>
+            
             <div className="pb-24">
               {transactions.length > 0 ? (
                 transactions.slice(0, 10).map(item => (
-                  <TransactionItem key={item.id} item={item} onDelete={handleDeleteTransaction} />
+                  <TransactionItem 
+                    key={item.id} 
+                    item={item} 
+                    onDelete={handleDeleteTransaction} 
+                  />
                 ))
               ) : (
-                <div className="text-center py-10 opacity-50"><p>暂无记录</p></div>
+                <div className="text-center py-10 opacity-50">
+                  <Wallet size={48} className="mx-auto mb-2 text-gray-300" />
+                  <p className="text-gray-400 text-sm">暂无记录，快去记一笔吧</p>
+                </div>
               )}
             </div>
           </div>
@@ -689,37 +771,72 @@ export default function App() {
         />
       )}
 
-      {/* FAB */}
+      {/* --- Floating Action Buttons (FAB) --- */}
       <div className="fixed bottom-24 right-4 z-40 max-w-md w-full mx-auto pointer-events-none flex flex-col items-end gap-3 pr-8">
-        <button onClick={() => fileInputRef.current?.click()} className="pointer-events-auto bg-emerald-100 text-emerald-700 p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center">
+        
+        {/* Camera Button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="pointer-events-auto bg-emerald-100 hover:bg-emerald-200 text-emerald-700 p-3 rounded-full shadow-lg shadow-gray-200 transition-transform active:scale-90 flex items-center justify-center"
+          title="拍照智能识别"
+        >
           <Camera size={24} />
         </button>
-        {/* 修复后的黑色加号按钮：大小与上方相机一致 (p-3, size 24, shadow-lg) */}
-        <button onClick={() => { setAiData(null); setShowAddModal(true); }} className="pointer-events-auto bg-gray-900 text-white p-3 rounded-full shadow-lg transition-transform active:scale-90 flex items-center justify-center group">
+
+        {/* Add Button (Updated UI: p-3, size 24, matching camera button size) */}
+        <button
+          onClick={() => {
+            setAiData(null);
+            setShowAddModal(true);
+          }}
+          className="pointer-events-auto bg-gray-900 hover:bg-black text-white p-3 rounded-full shadow-lg shadow-gray-400/50 transition-transform active:scale-90 flex items-center justify-center group"
+        >
           <Plus size={24} className="group-hover:rotate-90 transition-transform duration-300" />
         </button>
       </div>
 
-      {/* Bottom Nav */}
+      {/* --- Bottom Navigation --- */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-6 py-3 flex justify-around items-center z-30 max-w-md mx-auto">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-emerald-600' : 'text-gray-400'}`}>
+        <button 
+          onClick={() => setActiveTab('home')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'}`}
+        >
           <Home size={24} strokeWidth={activeTab === 'home' ? 2.5 : 2} />
           <span className="text-[10px] font-medium">明细</span>
         </button>
+
         <div className="w-12"></div> 
-        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'stats' ? 'text-emerald-600' : 'text-gray-400'}`}>
+
+        <button 
+          onClick={() => setActiveTab('stats')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'stats' ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'}`}
+        >
           <PieChart size={24} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
           <span className="text-[10px] font-medium">统计</span>
         </button>
       </div>
 
-      <AddTransactionModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} onAdd={handleAddTransaction} initialData={aiData} />
-      <BudgetModal isOpen={showBudgetModal} onClose={() => setShowBudgetModal(false)} currentBudget={monthlyBudget} onSave={setMonthlyBudget} />
+      {/* --- Modals --- */}
+      <AddTransactionModal 
+        isOpen={showAddModal} 
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAddTransaction}
+        initialData={aiData}
+      />
+      
+      <BudgetModal 
+        isOpen={showBudgetModal}
+        onClose={() => setShowBudgetModal(false)}
+        currentBudget={monthlyBudget}
+        onSave={setMonthlyBudget}
+      />
       
       <style>{`
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         .animate-bounce-slow { animation: bounce 2s infinite; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
       `}</style>
     </div>
   );
