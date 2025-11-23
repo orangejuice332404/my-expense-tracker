@@ -9,7 +9,7 @@ import {
 
 // --- ⚠️ 国内大模型 API 配置 ---
 const AI_CONFIG = {
-  apiKey: "YOUR_API_KEY_HERE", // 请务必填入您的 Key
+  apiKey: "ff1c9b7c8ede4bee994e030407396a75.8S73rNbiDENOJOcN", // 请务必填入您的 Key
   baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
   model: "glm-4v-flash" 
 };
