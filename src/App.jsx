@@ -4,43 +4,143 @@ import {
   Utensils, Bus, ShoppingBag, Coffee, Home as HouseIcon, Stethoscope, 
   Briefcase, Gift, CreditCard, MoreHorizontal, X, Camera, Loader2, Sparkles,
   Download, Upload, ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon,
-  LineChart, Filter
+  LineChart, Lock, User, LogOut, Eye, EyeOff
 } from 'lucide-react';
 
 // --- ⚠️ 国内大模型 API 配置 ---
 const AI_CONFIG = {
-  // 请将此处替换为您申请的智谱 API Key (必填)
-  apiKey: "ff1c9b7c8ede4bee994e030407396a75.8S73rNbiDENOJOcN", 
-  
+  apiKey: "ff1c9b7c8ede4bee994e030407396a75.8S73rNbiDENOJOcN", // 记得填入您的 Key
   baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-  
-  // ✅ 已配置为 GLM-4.5-Flash
   model: "glm-4v-flash" 
 };
 
-// --- 开屏动画组件 ---
-const SplashScreen = () => {
+// --- 🎨 自定义图标组件 ---
+const WeChatIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+    <path d="M8.25 2C4.8 2 2 4.5 2 7.6c0 1.8.9 3.4 2.3 4.5-.1.5-.6 1.8-.7 2 0 .1.1.2.2.1 1-.6 2.3-1.3 2.6-1.5.6.2 1.2.3 1.8.3.1 0 .3 0 .4 0-.1 2.9 2.7 5.3 6.2 5.3 1 0 1.9-.2 2.8-.5.3.2 1.6.9 2.6 1.5.1.1.2 0 .2-.1-.1-.3-.5-1.5-.7-2 1.4-1 2.3-2.7 2.3-4.5 0-3.1-2.8-5.6-6.2-5.6-3.1 0-5.8 2-6.1 4.7C9.3 11.9 9.7 12 10.1 12c3.9 0 7.1-2.8 7.1-6.2 0-.1 0-.1 0-.2C15.7 3.4 12.2 2 8.25 2zM6 6.5c.4 0 .7.3.7.7s-.3.7-.7.7-.7-.3-.7-.7.3-.7.7-.7zm4 0c.4 0 .7.3.7.7s-.3.7-.7.7-.7-.3-.7-.7.3-.7.7-.7zm4.5 7c-.4 0-.7-.3-.7-.7s.3-.7.7-.7.7.3.7.7-.3.7-.7.7zm4 0c-.4 0-.7-.3-.7-.7s.3-.7.7-.7.7.3.7.7-.3.7-.7.7z"/>
+  </svg>
+);
+
+const AlipayIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="currentColor">
+    <path d="M18.5 2h-13C3.6 2 2 3.6 2 5.5v13C2 20.4 3.6 22 5.5 22h13c1.9 0 3.5-1.6 3.5-3.5v-13C22 3.6 20.4 2 18.5 2zM9.5 11h5c.3 0 .5.2.5.5s-.2.5-.5.5h-2.2c.2 1.2.5 2.3 1 3.3.3-.3.6-.7.8-1.1.1-.3.4-.4.7-.3.3.1.4.4.3.7-.3.5-.7 1-1.1 1.4 1.2 1.1 2.8 1.8 4.5 2 .3 0 .5.3.5.6 0 .3-.2.5-.6.5-1.9-.2-3.6-1-5-2.3-1.2 1.1-2.6 2-4.1 2.5-.3.1-.6-.1-.7-.4-.1-.3.1-.6.4-.7 1.3-.4 2.6-1.2 3.6-2.1-.6-1.1-1-2.3-1.2-3.6H8.5c-.3 0-.5-.2-.5-.5s.2-.5.5-.5h2.6c.1-.8.2-1.6.4-2.4H8.5c-.3 0-.5-.2-.5-.5s.2-.5.5-.5h3.7c.2-1 .3-1.9.3-2 .1-.3.4-.4.7-.3.3.1.4.4.3.7-.1.3-.3 1.2-.5 2.1h4c.3 0 .5.2.5.5s-.2.5-.5.5h-4.4c-.2.8-.4 1.6-.5 2.4h2.4z"/>
+  </svg>
+);
+
+// --- 开屏动画 ---
+const SplashScreen = () => (
+  <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-600 to-teal-800 text-white">
+    <div className="p-5 bg-white/20 backdrop-blur-md rounded-3xl mb-6 shadow-2xl animate-bounce-in">
+      <Wallet size={64} className="text-white drop-shadow-md" />
+    </div>
+    <div className="text-center space-y-2">
+      <h1 className="text-3xl font-bold tracking-widest animate-slide-up" style={{ animationDelay: '0.2s' }}>王猪猪专属记账本</h1>
+      <p className="text-emerald-100 text-sm font-light tracking-wide animate-slide-up" style={{ animationDelay: '0.4s' }}>每一笔都算数 🐷</p>
+    </div>
+    <div className="absolute bottom-20 w-48 h-1.5 bg-emerald-900/30 rounded-full overflow-hidden">
+      <div className="h-full bg-emerald-200/80 rounded-full w-full animate-progress origin-left"></div>
+    </div>
+  </div>
+);
+
+// --- 🔐 简易登录组件 ---
+const LoginScreen = ({ onLogin }) => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [savedUser, setSavedUser] = useState(null);
+
+  useEffect(() => {
+    const user = localStorage.getItem('expense_user');
+    if (user) {
+      setSavedUser(JSON.parse(user));
+      setIsRegistering(false);
+    } else {
+      setIsRegistering(true); // 没用户数据，去注册
+    }
+  }, []);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!password) { setError('请输入密码'); return; }
+
+    if (isRegistering) {
+      if (!name) { setError('请输入昵称'); return; }
+      const newUser = { name, password };
+      localStorage.setItem('expense_user', JSON.stringify(newUser));
+      onLogin(newUser);
+    } else {
+      if (password === savedUser.password) {
+        onLogin(savedUser);
+      } else {
+        setError('密码错误 🐷');
+      }
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-600 to-teal-800 text-white">
-      <div className="p-5 bg-white/20 backdrop-blur-md rounded-3xl mb-6 shadow-2xl animate-bounce-in">
-        <Wallet size={64} className="text-white drop-shadow-md" />
-      </div>
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold tracking-widest animate-slide-up" style={{ animationDelay: '0.2s' }}>
-          王猪猪专属记账本
-        </h1>
-        <p className="text-emerald-100 text-sm font-light tracking-wide animate-slide-up" style={{ animationDelay: '0.4s' }}>
-          每一笔都算数 🐷
+    <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-gray-50 text-gray-800 px-6 animate-fade-in">
+      <div className="bg-white w-full max-w-sm p-8 rounded-3xl shadow-xl border border-gray-100">
+        <div className="flex justify-center mb-6">
+          <div className="p-4 bg-emerald-100 rounded-full text-emerald-600">
+            {isRegistering ? <User size={32} /> : <Lock size={32} />}
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold text-center mb-2">
+          {isRegistering ? '创建账号' : `欢迎回来，${savedUser?.name || '王猪猪'}`}
+        </h2>
+        <p className="text-center text-gray-400 text-sm mb-8">
+          {isRegistering ? '设置一个密码保护你的小金库' : '请输入密码解锁账本'}
         </p>
-      </div>
-      <div className="absolute bottom-20 w-48 h-1.5 bg-emerald-900/30 rounded-full overflow-hidden">
-        <div className="h-full bg-emerald-200/80 rounded-full w-full animate-progress origin-left"></div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isRegistering && (
+            <div>
+              <label className="text-xs font-bold text-gray-400 ml-1">昵称</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full p-3 bg-gray-50 rounded-xl border focus:border-emerald-500 outline-none font-medium"
+                placeholder="例如：王猪猪"
+              />
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-bold text-gray-400 ml-1">密码</label>
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-3 bg-gray-50 rounded-xl border focus:border-emerald-500 outline-none font-bold tracking-widest"
+              placeholder="••••"
+              inputMode="numeric" 
+            />
+          </div>
+          
+          {error && <p className="text-rose-500 text-center text-sm font-medium animate-pulse">{error}</p>}
+
+          <button type="submit" className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl font-bold shadow-lg shadow-emerald-200 transition-all">
+            {isRegistering ? '开始记账' : '解锁'}
+          </button>
+        </form>
+        
+        {!isRegistering && (
+          <div className="mt-6 text-center">
+            <button onClick={() => { if(window.confirm('确定要重置账号吗？之前的记账数据会保留，但你需要重新设置密码。')) { localStorage.removeItem('expense_user'); setIsRegistering(true); setName(''); setPassword(''); } }} className="text-xs text-gray-400 hover:text-gray-600 underline">
+              忘记密码 / 重置账号
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// --- 🐷 超支预警弹窗 ---
+// --- 🐷 超支预警 ---
 const BudgetAlertModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
@@ -49,52 +149,30 @@ const BudgetAlertModal = ({ isOpen, onClose }) => {
         <div className="text-6xl mb-4 animate-bounce-slow">🐷</div>
         <h3 className="text-xl font-black text-gray-800 mb-2">王猪猪🐷</h3>
         <p className="text-rose-500 font-bold text-lg mb-6">没钱用啦！💸</p>
-        <button 
-          onClick={onClose} 
-          className="w-full py-3 bg-gray-900 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg shadow-gray-300"
-        >
-          我知道了 😭
-        </button>
+        <button onClick={onClose} className="w-full py-3 bg-gray-900 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg shadow-gray-300">我知道了 😭</button>
       </div>
     </div>
   );
 };
 
-// --- 💳 钱包查账弹窗 (新增) ---
+// --- 💳 钱包查账弹窗 (修改版) ---
 const WalletModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div className="bg-white w-[280px] p-6 rounded-3xl shadow-2xl text-center animate-scale-up" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-gray-800 mb-6">快捷查账助手</h3>
-        
         <div className="space-y-4">
-          {/* 微信跳转 */}
-          <a 
-            href="weixin://" 
-            className="flex items-center justify-center gap-3 w-full py-3.5 bg-[#07C160] hover:bg-[#06ad56] text-white rounded-xl font-bold transition-transform active:scale-95 shadow-lg shadow-green-200 no-underline"
-          >
-            <span className="text-xl">💬</span> 
-            <span>打开微信</span>
+          {/* 微信 */}
+          <a href="weixin://" className="flex items-center justify-center gap-3 w-full py-3.5 bg-[#07C160] hover:bg-[#06ad56] text-white rounded-xl font-bold transition-transform active:scale-95 shadow-lg shadow-green-200 no-underline">
+            <WeChatIcon /> <span>打开微信</span>
           </a>
-
-          {/* 支付宝跳转 (尝试直接跳账单页) */}
-          <a 
-            href="alipays://platformapi/startapp?appId=20000055" 
-            className="flex items-center justify-center gap-3 w-full py-3.5 bg-[#1677FF] hover:bg-[#1366db] text-white rounded-xl font-bold transition-transform active:scale-95 shadow-lg shadow-blue-200 no-underline"
-          >
-            <span className="text-xl">💳</span>
-            <span>打开支付宝账单</span>
+          {/* 支付宝 */}
+          <a href="alipays://platformapi/startapp?appId=20000055" className="flex items-center justify-center gap-3 w-full py-3.5 bg-[#1677FF] hover:bg-[#1366db] text-white rounded-xl font-bold transition-transform active:scale-95 shadow-lg shadow-blue-200 no-underline">
+            <AlipayIcon /> <span>打开支付宝</span>
           </a>
         </div>
-
-        <button 
-          onClick={onClose}
-          className="mt-6 text-sm text-gray-400 hover:text-gray-600 p-2"
-        >
-          关闭
-        </button>
+        <button onClick={onClose} className="mt-6 text-sm text-gray-400 hover:text-gray-600 p-2">关闭</button>
       </div>
     </div>
   );
@@ -103,17 +181,13 @@ const WalletModal = ({ isOpen, onClose }) => {
 // --- 趋势图组件 ---
 const TrendChart = ({ data, lineColor = "#10b981" }) => {
   if (!data || data.length === 0) return <div className="h-32 flex items-center justify-center text-gray-300 text-xs">暂无数据</div>;
-
-  const height = 100;
-  const width = 300;
+  const height = 100; const width = 300;
   const maxVal = Math.max(...data.map(d => d.amount), 10); 
-  
   const points = data.map((d, i) => {
     const x = (i / (data.length - 1)) * width;
     const y = height - (d.amount / maxVal) * height;
     return `${x},${y}`;
   }).join(' ');
-
   return (
     <div className="w-full overflow-hidden">
       <svg viewBox={`0 -10 ${width} ${height + 20}`} className="w-full h-32 overflow-visible">
@@ -132,12 +206,11 @@ const TrendChart = ({ data, lineColor = "#10b981" }) => {
   );
 };
 
-// --- 动画组件：数字滚动 ---
+// --- 动画组件 ---
 const CountUp = ({ end, duration = 1000, prefix = '', decimals = 2 }) => {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    let startTime;
-    let animationFrame;
+    let startTime; let animationFrame;
     const animate = (timestamp) => {
       if (!startTime) startTime = timestamp;
       const progress = timestamp - startTime;
@@ -152,7 +225,7 @@ const CountUp = ({ end, duration = 1000, prefix = '', decimals = 2 }) => {
   return <span>{prefix}{count.toLocaleString('zh-CN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}</span>;
 };
 
-// --- 配置数据 ---
+// --- 配置数据 (保持不变) ---
 const EXPENSE_CATEGORIES = [
   { id: 'food', name: '餐饮', icon: Utensils, color: 'bg-orange-100 text-orange-600' },
   { id: 'transport', name: '交通', icon: Bus, color: 'bg-blue-100 text-blue-600' },
@@ -162,7 +235,6 @@ const EXPENSE_CATEGORIES = [
   { id: 'medical', name: '医疗', icon: Stethoscope, color: 'bg-red-100 text-red-600' },
   { id: 'other_expense', name: '其他', icon: MoreHorizontal, color: 'bg-gray-100 text-gray-600' },
 ];
-
 const INCOME_CATEGORIES = [
   { id: 'salary', name: '工资', icon: Briefcase, color: 'bg-green-100 text-green-600' },
   { id: 'bonus', name: '奖金', icon: Gift, color: 'bg-yellow-100 text-yellow-600' },
@@ -282,7 +354,6 @@ const StatsView = ({ transactions, onExport, onImportTrigger }) => {
 
   const filteredByType = monthlyTransactions.filter(t => t.type === viewType);
   const total = filteredByType.reduce((acc, curr) => acc + curr.amount, 0);
-  
   const categoryTotals = filteredByType.reduce((acc, curr) => { acc[curr.category] = (acc[curr.category] || 0) + curr.amount; return acc; }, {});
   const categoryList = viewType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
   const statsData = Object.entries(categoryTotals).map(([catId, amount]) => {
@@ -444,9 +515,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home'); 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
-  // 💰 新增：钱包弹窗状态
+  // 💰 钱包弹窗状态
   const [showWalletModal, setShowWalletModal] = useState(false);
   
+  // 🔐 登录状态
+  const [user, setUser] = useState(null); // 如果为 null 则显示登录界面
+
   const [transactions, setTransactions] = useState([]);
   const [monthlyBudget, setMonthlyBudget] = useState(0); 
   const [loaded, setLoaded] = useState(false);
@@ -463,6 +537,11 @@ export default function App() {
     const timer = setTimeout(() => setShowSplash(false), 2200);
     return () => clearTimeout(timer);
   }, []);
+
+  // 登录/注册成功回调
+  const handleLogin = (loggedInUser) => {
+    setUser(loggedInUser);
+  };
 
   useEffect(() => {
     try {
@@ -505,6 +584,13 @@ export default function App() {
   }, [remainingBudget, monthlyBudget, budgetAlertDismissed]);
 
   if (showSplash) return <SplashScreen />;
+
+  // 🔐 如果没有登录，显示登录界面
+  if (!user) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  // --- 登录后的主界面逻辑 ---
 
   const handleAddTransaction = (newTransaction) => {
     setTransactions(prev => [newTransaction, ...prev]);
@@ -596,7 +682,6 @@ export default function App() {
 
       <BudgetAlertModal isOpen={showBudgetAlert} onClose={() => { setShowBudgetAlert(false); setBudgetAlertDismissed(true); }} />
       
-      {/* 💳 钱包弹窗 */}
       <WalletModal isOpen={showWalletModal} onClose={() => setShowWalletModal(false)} />
 
       {activeTab === 'home' && (
@@ -604,6 +689,15 @@ export default function App() {
           <div className="bg-emerald-600 text-white p-6 rounded-b-[2.5rem] shadow-lg shadow-emerald-200 relative overflow-hidden">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-xl"></div>
             <div className="relative z-10">
+              {/* 顶部问候栏 (新增) */}
+              <div className="flex justify-between items-center mb-6 px-1">
+                <div className="flex items-center gap-2 opacity-90">
+                  <div className="bg-white/20 p-1.5 rounded-full"><User size={14} className="text-white" /></div>
+                  <span className="text-sm font-medium">Hi, {user?.name}</span>
+                </div>
+                <button onClick={() => setUser(null)} className="text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20 transition-colors">锁定</button>
+              </div>
+
               <div className="flex justify-between items-start mb-4">
                  <div onClick={() => setShowBudgetModal(true)} className="cursor-pointer active:scale-95 transition-transform origin-left">
                    <div className="flex items-center gap-1 text-emerald-100 text-sm font-medium mb-1"><span>本月剩余预算</span><Settings size={14} className="opacity-70" /></div>
